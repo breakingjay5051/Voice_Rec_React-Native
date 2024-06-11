@@ -7,6 +7,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
+import * as MediaLibrary from "expo-media-library";
 
 export default function HomeScreen() {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -20,12 +21,18 @@ export default function HomeScreen() {
 
   const requestPermission = async () => {
     try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== "granted") {
+      const { status: audioStatus } = await Audio.requestPermissionsAsync();
+      if (audioStatus !== "granted") {
         console.error("Permission to access microphone denied!");
       }
+
+      const { status: mediaStatus } = await MediaLibrary.requestPermissionsAsync();
+      if (mediaStatus !== "granted") {
+        console.error("Permission to access media library denied!");
+      }
+
     } catch (err) {
-      console.error("Failed to request microphone permission:", err);
+      console.error("Failed to request permissions:", err);
     }
   };
 
@@ -66,11 +73,22 @@ export default function HomeScreen() {
       const fileUri = `${directory}/${fileName}`;
 
       // Ensure directory exists
-      await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+      await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}${folderName}`, { intermediates: true });
+
+      // Move the file to the directory.
       await FileSystem.moveAsync({
         from: uri!,
         to: fileUri,
       });
+
+      // Move the file to Downloads directory.
+      const asset = await MediaLibrary.createAssetAsync(fileUri);
+      const album = await MediaLibrary.getAlbumAsync("Downloads");
+      if (album == null) {
+        await MediaLibrary.createAlbumAsync("Downloads", asset, false);
+      } else {
+        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+      }
 
       console.log(`Saved recording to ${fileUri}`);
       setRecording(null);

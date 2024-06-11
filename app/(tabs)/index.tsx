@@ -1,50 +1,133 @@
-import { Image, StyleSheet, Platform } from 'react-native';
-
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import React, { useState, useEffect } from "react";
+import { Image, StyleSheet, View } from "react-native";
+import { Button } from "react-native-elements";
+import { HelloWave } from "@/components/HelloWave";
+import ParallaxScrollView from "@/components/ParallaxScrollView";
+import { ThemedText } from "@/components/ThemedText";
+import { ThemedView } from "@/components/ThemedView";
+import { Audio } from "expo-av";
+import * as FileSystem from "expo-file-system";
 
 export default function HomeScreen() {
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [currentRecordingIndex, setCurrentRecordingIndex] = useState(0);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPositivePhase, setIsPositivePhase] = useState(true);
+
+  useEffect(() => {
+    requestPermission();
+  }, []);
+
+  const requestPermission = async () => {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") {
+        console.error("Permission to access microphone denied!");
+      }
+    } catch (err) {
+      console.error("Failed to request microphone permission:", err);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      console.log("Starting recording...");
+      const recordingObject = new Audio.Recording();
+      await recordingObject.prepareToRecordAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      await recordingObject.startAsync();
+      setRecording(recordingObject);
+      setIsRecording(true);
+      console.log("Recording started");
+
+      // Stop recording after 5 seconds
+      setTimeout(() => {
+        stopRecording();
+      }, 5000);
+    } catch (err) {
+      console.error("Failed to start recording", err);
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      console.log("Stopping recording...");
+      await recording?.stopAndUnloadAsync();
+      const uri = recording?.getURI();
+      console.log("Recording stopped and stored at", uri);
+
+      // Save recording
+      const folderName = isPositivePhase
+        ? "Positive_audio_data"
+        : "Negative_audio_files";
+      const fileName = `${currentRecordingIndex}.wav`;
+      const directory = `${FileSystem.documentDirectory}${folderName}`;
+      const fileUri = `${directory}/${fileName}`;
+
+      // Ensure directory exists
+      await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+      await FileSystem.moveAsync({
+        from: uri!,
+        to: fileUri,
+      });
+
+      console.log(`Saved recording to ${fileUri}`);
+      setRecording(null);
+      setIsRecording(false);
+
+      // Increment the recording index
+      setCurrentRecordingIndex((prevIndex) => {
+        if (prevIndex === 49) {
+          setIsPositivePhase(!isPositivePhase);
+          return 0;
+        }
+        return prevIndex + 1;
+      });
+    } catch (err) {
+      console.error("Failed to stop recording:", err);
+    }
+  };
+
+  const handleButtonPress = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
   return (
     <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
+      headerBackgroundColor={{ light: "#7ed2fc", dark: "#1D3D47" }}
       headerImage={
         <Image
-          source={require('@/assets/images/partial-react-logo.png')}
+          source={require("@/assets/images/bj_logo.png")}
           style={styles.reactLogo}
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
+      }
+    >
+      <ThemedText
+        style={{
+          textAlign: "center",
+          color: "#fd0100",
+          fontWeight: "600",
+          fontSize: 25,
+          marginTop: 20,
+          marginBottom: 50,
+        }}
+      >
+        Breakingjay Audio Recorder!!
+      </ThemedText>
+      <View style={styles.helloWaveContainer}>
         <HelloWave />
-      </ThemedView>
+      </View>
       <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({ ios: 'cmd + d', android: 'cmd + m' })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
+        <Button
+          title={recording ? "Stop Recording" : "Start Recording"}
+          onPress={recording ? stopRecording : startRecording}
+          buttonStyle={[styles.startButton, recording && styles.stopButton]}
+        />
       </ThemedView>
     </ParallaxScrollView>
   );
@@ -52,19 +135,36 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    height: 300,
   },
   stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+    display: "flex",
+    flexDirection: "column",
+    alignContent: "center",
+    justifyContent: "center",
+    gap: 100,
   },
   reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+    height: 250,
+    width: "100%",
+    position: "absolute",
+  },
+  startButton: {
+    backgroundColor: "#00c50d",
+    padding: 15,
+    borderRadius: 20,
+  },
+  stopButton: {
+    backgroundColor: "#fd0100",
+    padding: 15,
+    borderRadius: 20,
+  },
+  helloWaveContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+    marginVertical: 20,
+    paddingBottom: 100,
   },
 });

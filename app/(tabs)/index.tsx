@@ -21,18 +21,16 @@ export default function HomeScreen() {
 
   const requestPermission = async () => {
     try {
-      const { status: audioStatus } = await Audio.requestPermissionsAsync();
-      if (audioStatus !== "granted") {
+      const audioPermission = await Audio.requestPermissionsAsync();
+      if (audioPermission.status !== "granted") {
         console.error("Permission to access microphone denied!");
       }
-
-      const { status: mediaStatus } = await MediaLibrary.requestPermissionsAsync();
-      if (mediaStatus !== "granted") {
+      const mediaPermission = await MediaLibrary.requestPermissionsAsync();
+      if (mediaPermission.status !== "granted") {
         console.error("Permission to access media library denied!");
       }
-
     } catch (err) {
-      console.error("Failed to request permissions:", err);
+      console.error("Failed to request microphone or media library permission:", err);
     }
   };
 
@@ -64,33 +62,21 @@ export default function HomeScreen() {
       const uri = recording?.getURI();
       console.log("Recording stopped and stored at", uri);
 
-      // Save recording
-      const folderName = isPositivePhase
-        ? "Positive_audio_data"
-        : "Negative_audio_files";
-      const fileName = `${currentRecordingIndex}.wav`;
-      const directory = `${FileSystem.documentDirectory}${folderName}`;
-      const fileUri = `${directory}/${fileName}`;
+      if (uri) {
+        // Save recording
+        const folderName = isPositivePhase
+          ? "Positive_audio_data"
+          : "Negative_audio_files";
+        const fileName = `${currentRecordingIndex}.wav`;
 
-      // Ensure directory exists
-      await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}${folderName}`, { intermediates: true });
+        const asset = await MediaLibrary.createAssetAsync(uri);
+        await MediaLibrary.createAlbumAsync(folderName, asset, false);
 
-      // Move the file to the directory.
-      await FileSystem.moveAsync({
-        from: uri!,
-        to: fileUri,
-      });
-
-      // Move the file to Downloads directory.
-      const asset = await MediaLibrary.createAssetAsync(fileUri);
-      const album = await MediaLibrary.getAlbumAsync("Downloads");
-      if (album == null) {
-        await MediaLibrary.createAlbumAsync("Downloads", asset, false);
+        console.log(`Saved recording to ${uri}`);
       } else {
-        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+        console.error("Recording URI is null or undefined");
       }
 
-      console.log(`Saved recording to ${fileUri}`);
       setRecording(null);
       setIsRecording(false);
 
@@ -143,7 +129,7 @@ export default function HomeScreen() {
       <ThemedView style={styles.stepContainer}>
         <Button
           title={recording ? "Stop Recording" : "Start Recording"}
-          onPress={recording ? stopRecording : startRecording}
+          onPress={handleButtonPress}
           buttonStyle={[styles.startButton, recording && styles.stopButton]}
         />
       </ThemedView>
@@ -186,3 +172,4 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
 });
+

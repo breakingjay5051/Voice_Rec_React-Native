@@ -59,7 +59,7 @@ export default function HomeScreen() {
     try {
       console.log("Stopping recording...");
       await recording?.stopAndUnloadAsync();
-      const uri = recording?.getURI();
+      const uri = recording?._uri;
       console.log("Recording stopped and stored at", uri);
 
       if (uri) {

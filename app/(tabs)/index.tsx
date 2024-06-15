@@ -6,100 +6,72 @@ import ParallaxScrollView from "@/components/ParallaxScrollView";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { Audio } from "expo-av";
-import * as FileSystem from "expo-file-system";
-import * as MediaLibrary from "expo-media-library";
 
 export default function HomeScreen() {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [currentRecordingIndex, setCurrentRecordingIndex] = useState(0);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isPositivePhase, setIsPositivePhase] = useState(true);
+  const [permissionResponse, requestPermission] = Audio.usePermissions();
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
 
-  useEffect(() => {
-    requestPermission();
-  }, []);
-
-  const requestPermission = async () => {
+  async function startRecording() {
     try {
-      const audioPermission = await Audio.requestPermissionsAsync();
-      if (audioPermission.status !== "granted") {
-        console.error("Permission to access microphone denied!");
+      if (permissionResponse?.status !== "granted") {
+        console.log("Requesting permissions...");
+        await requestPermission();
       }
-      const mediaPermission = await MediaLibrary.requestPermissionsAsync();
-      if (mediaPermission.status !== "granted") {
-        console.error("Permission to access media library denied!");
-      }
-    } catch (err) {
-      console.error("Failed to request microphone or media library permission:", err);
-    }
-  };
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
 
-  const startRecording = async () => {
-    try {
       console.log("Starting recording...");
-      const recordingObject = new Audio.Recording();
-      await recordingObject.prepareToRecordAsync(
+      const { recording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
-      await recordingObject.startAsync();
-      setRecording(recordingObject);
-      setIsRecording(true);
-      console.log("Recording started");
-
-      // Stop recording after 5 seconds
-      setTimeout(() => {
-        stopRecording();
-      }, 5000);
+      setRecording(recording);
+      console.log("Recording started...");
     } catch (err) {
-      console.error("Failed to start recording", err);
+      console.error("Failed to start recording!", err);
     }
-  };
+  }
 
-  const stopRecording = async () => {
-    try {
-      console.log("Stopping recording...");
-      await recording?.stopAndUnloadAsync();
-      const uri = recording?._uri;
-      console.log("Recording stopped and stored at", uri);
+  async function stopRecording() {
+    console.log("Stopping recording...");
+    setRecording(null);
+    await recording?.stopAndUnloadAsync();
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+    });
+    const uri = recording?.getURI();
+    console.log("Recording stopped and stored at", uri);
+  }
 
-      if (uri) {
-        // Save recording
-        const folderName = isPositivePhase
-          ? "Positive_audio_data"
-          : "Negative_audio_files";
-        const fileName = `${currentRecordingIndex}.wav`;
+  async function playSound() {
+    console.log("Loading Sound File...");
+    const { sound } = await Audio.Sound.createAsync(
+      require("../../assets/sounds/hello.mp3")
+    );
+    setSound(sound);
+    console.log("Playing Sound...");
+    await sound.playAsync();
+  }
 
-        const asset = await MediaLibrary.createAssetAsync(uri);
-        await MediaLibrary.createAlbumAsync(folderName, asset, false);
+  async function playSoundStop() {
+    if (sound) {
+      console.log("Stopping Sound...");
+      await sound.stopAsync();
+      await sound.unloadAsync();
+      setSound(null);
+    }
+  }
 
-        console.log(`Saved recording to ${uri}`);
-      } else {
-        console.error("Recording URI is null or undefined");
-      }
-
-      setRecording(null);
-      setIsRecording(false);
-
-      // Increment the recording index
-      setCurrentRecordingIndex((prevIndex) => {
-        if (prevIndex === 49) {
-          setIsPositivePhase(!isPositivePhase);
-          return 0;
+  useEffect(() => {
+    return sound
+      ? () => {
+          console.log("Unloading Sound...");
+          sound.unloadAsync();
         }
-        return prevIndex + 1;
-      });
-    } catch (err) {
-      console.error("Failed to stop recording:", err);
-    }
-  };
-
-  const handleButtonPress = () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
-    }
-  };
+      : undefined;
+  }, [sound]);
 
   return (
     <ParallaxScrollView
@@ -128,8 +100,13 @@ export default function HomeScreen() {
       </View>
       <ThemedView style={styles.stepContainer}>
         <Button
+          title={sound ? "Stop Playing" : "Start Playing"}
+          onPress={sound ? playSoundStop : playSound}
+          buttonStyle={[styles.playButton, styles.stopPlayButton]}
+        />
+        <Button
           title={recording ? "Stop Recording" : "Start Recording"}
-          onPress={handleButtonPress}
+          onPress={recording ? stopRecording : startRecording}
           buttonStyle={[styles.startButton, recording && styles.stopButton]}
         />
       </ThemedView>
@@ -165,6 +142,16 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 20,
   },
+  playButton: {
+    backgroundColor: "#00c50d",
+    padding: 15,
+    borderRadius: 20,
+  },
+  stopPlayButton: {
+    backgroundColor: "#fd0100",
+    padding: 15,
+    borderRadius: 20,
+  },
   helloWaveContainer: {
     justifyContent: "center",
     alignItems: "center",
@@ -172,4 +159,3 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
 });
-

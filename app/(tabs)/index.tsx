@@ -53,6 +53,13 @@ export default function HomeScreen() {
     setSound(sound);
     console.log("Playing Sound...");
     await sound.playAsync();
+
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (status.isLoaded && status.didJustFinish) {
+        console.log("Sound finished playing...");
+        playSoundStop();
+      }
+    });
   }
 
   async function playSoundStop() {
@@ -61,6 +68,7 @@ export default function HomeScreen() {
       await sound.stopAsync();
       await sound.unloadAsync();
       setSound(null);
+      console.log('Sound state set to null');
     }
   }
 
@@ -102,7 +110,7 @@ export default function HomeScreen() {
         <Button
           title={sound ? "Stop Playing" : "Start Playing"}
           onPress={sound ? playSoundStop : playSound}
-          buttonStyle={[styles.playButton, styles.stopPlayButton]}
+          buttonStyle={[styles.playButton, sound && styles.stopPlayButton]}
         />
         <Button
           title={recording ? "Stop Recording" : "Start Recording"}
@@ -156,6 +164,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginVertical: 20,
-    paddingBottom: 100,
+    paddingBottom: 10,
   },
 });
